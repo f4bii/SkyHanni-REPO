@@ -15,17 +15,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get changed JSON files
+      - name: Get changed files
         id: changed
         uses: tj-actions/changed-files@v45
         with:
           files: "**.json"
-          separator: "\n"
 
       - name: Validate JSON files
         if: steps.changed.outputs.any_changed == 'true'
-        uses: GrantBirki/json-yaml-validate@v3
+        id: validate
+        run: .github/scripts/validate-json.sh
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.all_changed_files }}
+
+      - name: Comment on PR
+        if: steps.validate.outputs.failed == 'true'
+        uses: actions/github-script@v7
         with:
-          comment: "true"
-          use_gitignore: "true"
-          files: ${{ steps.changed.outputs.all_changed_files }}
+          script: |
+            const script = require('./.github/scripts/comment-json-errors.js');
+            await script({ github, context });
+        env:
+          REPORT: ${{ steps.validate.outputs.report }}
+
+      - name: Fail if invalid
+        if: steps.validate.outputs.failed == 'true'
+        run: exit 1
